@@ -1,0 +1,13 @@
+../Core/Src/mpu9250.cpp:3:15:double wrap(double, double)	3
+../Core/Src/mpu9250.cpp:11:1:MPU9250::MPU9250(I2C_HandleTypeDef&)	1
+../Core/Src/mpu9250.cpp:18:9:uint8_t MPU9250::begin(int, int)	2
+../Core/Src/mpu9250.cpp:33:9:uint8_t MPU9250::writeData(uint8_t, uint8_t)	1
+../Core/Src/mpu9250.cpp:38:9:uint8_t MPU9250::setGyroConfig(int)	5
+../Core/Src/mpu9250.cpp:64:9:uint8_t MPU9250::setAccConfig(int)	5
+../Core/Src/mpu9250.cpp:90:6:void MPU9250::setGyroOffsets(double, double, double)	1
+../Core/Src/mpu9250.cpp:96:6:void MPU9250::setAccOffsets(double, double, double)	1
+../Core/Src/mpu9250.cpp:102:6:void MPU9250::setFilterGyroCoef(double)	3
+../Core/Src/mpu9250.cpp:109:6:void MPU9250::setFilterAccCoef(double)	1
+../Core/Src/mpu9250.cpp:113:6:void MPU9250::calcOffsets(bool, bool)	6
+../Core/Src/mpu9250.cpp:146:9:uint8_t MPU9250::fetchData()	2
+../Core/Src/mpu9250.cpp:167:9:uint8_t MPU9250::update()	3
