@@ -27,13 +27,6 @@
 
 #include "motor_pid.h"
 #include "mpu9250.h"
-
-#include "ros.h"
-#include "ros/time.h"
-#include "geometry_msgs/Twist.h"
-#include "ired_msgs/IMU.h"
-#include "ired_msgs/Motor.h"
-#include "std_msgs/Empty.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -57,10 +50,10 @@ typedef struct {
 #define KP          0
 #define KI          1
 #define KD          2
-#define MPS2RPM(x)  (x * 280.8616642798) // N = 60/(2*PI*r) * V
-#define RPM2MPS(x)  (x * 0.003560471674) // V = (2*PI*r)/60 * N
-#define LENGHT			1
-#define WIDTH				2
+#define MPS2RPM(x)  (x * 150.3826233939) // N = 60/(2*PI*r) * V
+#define RPM2MPS(x)  (x * 0.006649704450) // V = (2*PI*r)/60 * N
+#define LENGHT			0.2909744f
+#define WIDTH				0.2909744f
 #define DEG2RAD(x)	(x*0.0174532925) // X = x * PI/180
 /* USER CODE END PD */
 
@@ -92,9 +85,6 @@ Motor_Speed_Data_Typedef motor_front_left_, motor_front_right_, motor_rear_left_
 
 /* PID Data */
 PID_Data_Typedef pid_data_front_left_, pid_data_front_right_, pid_data_rear_left_, pid_data_rear_right_;
-
-/* ROS */
-uint8_t m_u8_uartBuffer = 43;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -119,32 +109,11 @@ void motor_front_right_drive(double dt);
 void motor_rear_left_drive(double dt);
 void motor_rear_right_drive(double dt);
 void motor_initData(Motor_Speed_Data_Typedef *_motor);
-
-/* ROS */
-void commandResetCallback(const std_msgs::Empty &msg);
-void commandVelocityCallback(const geometry_msgs::Twist &msg);
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart);
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart);
-void ROS_setup(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-ros::NodeHandle nh_;
-ros::Time last_time_cmd_vel_;
-ired_msgs::IMU imu_;
-ired_msgs::Motor motor_;
 
-ros::Publisher imu_pub_("/ired/rollpitchyaw", &imu_);
-ros::Publisher motor_pub_("/ired/motor/speed", &motor_);
-ros::Subscriber<geometry_msgs::Twist> cmd_vel_sub_("/cmd_vel", &commandVelocityCallback);
-ros::Subscriber<std_msgs::Empty> reset_sub_("/ired/reset", commandResetCallback);
-
-double goal_linear_x_velocity_;
-double goal_linear_y_velocity_;
-double goal_angular_velocity_;
-double wheel_speed_cmd_[4];
-double set_speed_motor_[4];
 /* USER CODE END 0 */
 
 /**
@@ -154,7 +123,7 @@ double set_speed_motor_[4];
 int main(void) {
 
 	/* USER CODE BEGIN 1 */
-
+	uint8_t tmp_ch[100];
 	/* USER CODE END 1 */
 
 	/* MCU Configuration--------------------------------------------------------*/
@@ -238,13 +207,10 @@ int main(void) {
 	setupPIDParameter(&pid_data_rear_left_, 1.0, 0.0, 0.0);
 	setupPIDParameter(&pid_data_rear_right_, 1.0, 0.0, 0.0);
 
-	/* ROS */
-	ROS_setup();
-
 	/* Timer */
-	ros::Time time_now, tTime[3];
-	for (int i = 1; i < 3; i++) {
-		tTime[i] = nh_.now();
+	uint32_t time_now, tTime[3];
+	for (int i = 0; i < 3; i++) {
+		tTime[i] = HAL_GetTick();
 	}
 
 	/* USER CODE END 2 */
@@ -252,43 +218,20 @@ int main(void) {
 	/* Infinite loop */
 	/* USER CODE BEGIN WHILE */
 	while (1) {
-		time_now = nh_.now();
-		if ((time_now - tTime[0]).toSec() > 0.05) {
-			/* IMU */
-			imu_.roll = mpu.getAngleX();
-			imu_.pitch = mpu.getAngleY();
-			imu_.yaw = mpu.getAngleZ();
-			imu_pub_.publish(&imu_);
-
-			/* Motor */
-			motor_.speed_sp[FRONT_LEFT] = motor_front_left_.speed_sp;
-			motor_.speed_sp[FRONT_RIGHT] = motor_front_right_.speed_sp;
-			motor_.speed_sp[REAR_LEFT] = motor_rear_left_.speed_sp;
-			motor_.speed_sp[REAR_RIGHT] = motor_rear_right_.speed_sp;
-			motor_.speed_fb[FRONT_LEFT] = motor_front_left_.speed_pv;
-			motor_.speed_fb[FRONT_RIGHT] = motor_front_right_.speed_pv;
-			motor_.speed_fb[REAR_LEFT] = motor_rear_left_.speed_pv;
-			motor_.speed_fb[REAR_RIGHT] = motor_rear_right_.speed_pv;
-			motor_pub_.publish(&motor_);
+		time_now = HAL_GetTick();
+		if (time_now - tTime[0] > 50) {
+			sprintf((char *)tmp_ch, "%lf %lf\r\n", motor_front_left_.speed_sp, motor_front_left_.speed_pv);
+			HAL_UART_Transmit(&huart1, tmp_ch, strlen((char *)tmp_ch), 1000);
 
 			HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_13);
-			nh_.spinOnce();
-
 			tTime[0] = time_now;
 		}
 
-		if ((time_now - tTime[1]).toSec() > 0.01) {
-			motor_front_left_.speed_sp = set_speed_motor_[FRONT_LEFT];
-			motor_front_right_.speed_sp = set_speed_motor_[FRONT_RIGHT];
-			motor_rear_left_.speed_sp = set_speed_motor_[REAR_LEFT];
-			motor_rear_right_.speed_sp = set_speed_motor_[REAR_RIGHT];
-
-			if ((time_now - last_time_cmd_vel_).toSec() > 1.0) {
-				motor_front_left_.speed_sp = 0.0f;
-				motor_front_right_.speed_sp = 0.0f;
-				motor_rear_left_.speed_sp = 0.0f;
-				motor_rear_right_.speed_sp = 0.0f;
-			}
+		if (time_now - tTime[1] > 10) {
+			motor_front_left_.speed_sp = 0.0;
+			motor_front_right_.speed_sp = 0.0;
+			motor_rear_left_.speed_sp = 0.0;
+			motor_rear_right_.speed_sp = 0.0;
 
 			motor_front_left_drive(0.01);
 			motor_front_right_drive(0.01);
@@ -299,7 +242,7 @@ int main(void) {
 			tTime[1] = time_now;
 		}
 
-		if ((time_now - tTime[2]).toSec() > 0.01) {
+		if (time_now - tTime[2] > 10) {
 			uint8_t status = mpu.update();
 			if (status != HAL_OK) {
 				while (status != HAL_OK) {
@@ -921,78 +864,6 @@ void motor_initData(Motor_Speed_Data_Typedef *_motor) {
 	_motor->speed_command = 0.0;
 	_motor->speed_pv = 0.0;
 	_motor->speed_sp = 0.0;
-}
-
-/* ROS */
-void commandResetCallback(const std_msgs::Empty &msg) {
-	char log_msg[50];
-	(void) (msg);
-
-	sprintf(log_msg, "Start Calibration of MPU6050");
-	nh_.loginfo(log_msg);
-
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, GPIO_PIN_SET);
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET);
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, GPIO_PIN_RESET);
-
-	mpu.calcOffsets();
-
-	sprintf(log_msg, "Calibration End");
-	nh_.loginfo(log_msg);
-}
-
-void commandVelocityCallback(const geometry_msgs::Twist &msg) {
-	last_time_cmd_vel_ = nh_.now();
-	goal_linear_x_velocity_ = msg.linear.x;
-	goal_linear_y_velocity_ = msg.linear.y;
-	goal_angular_velocity_ = msg.angular.z;
-
-	wheel_speed_cmd_[FRONT_LEFT] = goal_linear_x_velocity_ * cos(DEG2RAD(45.0))
-			+ goal_linear_y_velocity_ * sin(DEG2RAD(45.0)) + goal_angular_velocity_ * (LENGHT + WIDTH);
-	wheel_speed_cmd_[FRONT_RIGHT] = goal_linear_x_velocity_ * cos(DEG2RAD(135.0))
-			+ goal_linear_y_velocity_ * sin(DEG2RAD(135.0)) + goal_angular_velocity_ * (LENGHT + WIDTH);
-	wheel_speed_cmd_[REAR_LEFT] = goal_linear_x_velocity_ * cos(DEG2RAD(315.0))
-			+ goal_linear_y_velocity_ * sin(DEG2RAD(315.0)) + goal_angular_velocity_ * (LENGHT + WIDTH);
-	wheel_speed_cmd_[REAR_RIGHT] = goal_linear_x_velocity_ * cos(DEG2RAD(225.0))
-			+ goal_linear_y_velocity_ * sin(DEG2RAD(225.0)) + goal_angular_velocity_ * (LENGHT + WIDTH);
-
-	set_speed_motor_[FRONT_LEFT] = MPS2RPM(wheel_speed_cmd_[FRONT_LEFT]);
-	set_speed_motor_[FRONT_RIGHT] = MPS2RPM(wheel_speed_cmd_[FRONT_RIGHT]);
-	set_speed_motor_[REAR_LEFT] = MPS2RPM(wheel_speed_cmd_[REAR_LEFT]);
-	set_speed_motor_[REAR_RIGHT] = MPS2RPM(wheel_speed_cmd_[REAR_RIGHT]);
-}
-
-void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
-	nh_.getHardware()->flush();
-}
-
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-	nh_.getHardware()->reset_rbuf();
-}
-
-void ROS_setup(void) {
-	nh_.initNode();
-	nh_.advertise(imu_pub_);
-	nh_.advertise(motor_pub_);
-	nh_.subscribe(cmd_vel_sub_);
-	nh_.subscribe(reset_sub_);
-
-	/* ired_msgs/IMU */
-	imu_.roll = 0.0;
-	imu_.pitch = 0.0;
-	imu_.yaw = 0.0;
-
-	/* ired_msgs/Motor */
-	for (int i = 0; i < 4; i++) {
-		motor_.speed_fb[i] = 0.0;
-		motor_.speed_sp[i] = 0.0;
-	}
-	for (int i = 0; i < 3; i++) {
-		motor_.pid_motor_front_left[i] = 0.0;
-		motor_.pid_motor_front_right[i] = 0.0;
-		motor_.pid_motor_rear_left[i] = 0.0;
-		motor_.pid_motor_rear_right[i] = 0.0;
-	}
 }
 /* USER CODE END 4 */
 
