@@ -198,16 +198,17 @@ int main(void) {
 	resetPIDData(&pid_data_front_right_);
 	resetPIDData(&pid_data_rear_left_);
 	resetPIDData(&pid_data_rear_right_);
-	setupPIDParameter(&pid_data_front_left_, 1.0, 0.0, 0.0);
-	setupPIDParameter(&pid_data_front_right_, 1.0, 0.0, 0.0);
-	setupPIDParameter(&pid_data_rear_left_, 1.0, 0.0, 0.0);
-	setupPIDParameter(&pid_data_rear_right_, 1.0, 0.0, 0.0);
+	setupPIDParameter(&pid_data_front_left_, 15.0, 85.0, 0.02);
+	setupPIDParameter(&pid_data_front_right_, 15.0, 40.2, 0.02);
+	setupPIDParameter(&pid_data_rear_left_, 15.0, 40.2, 0.02);
+	setupPIDParameter(&pid_data_rear_right_, 15.0, 40.2, 0.02);
 
 	/* Timer */
 	uint32_t time_now, tTime[3];
 	for (int i = 0; i < 3; i++) {
 		tTime[i] = HAL_GetTick();
 	}
+	int count = 0;
 
   /* USER CODE END 2 */
 
@@ -216,18 +217,18 @@ int main(void) {
 	while (1) {
 		time_now = HAL_GetTick();
 		if (time_now - tTime[0] > 50) {
-			sprintf((char *)tmp_ch, "%lf %lf\r\n", motor_front_left_.speed_sp, motor_front_left_.speed_pv);
-			HAL_UART_Transmit(&huart1, tmp_ch, strlen((char *)tmp_ch), 1000);
+//			sprintf((char *)tmp_ch, "%lf %lf\r\n", motor_front_left_.speed_sp, motor_front_left_.speed_pv);
+//			HAL_UART_Transmit(&huart1, tmp_ch, strlen((char *)tmp_ch), 1000);
 
 			HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_13);
 			tTime[0] = time_now;
 		}
 
 		if (time_now - tTime[1] > 10) {
-			motor_front_left_.speed_sp = 0.0;
-			motor_front_right_.speed_sp = 0.0;
-			motor_rear_left_.speed_sp = 0.0;
-			motor_rear_right_.speed_sp = 0.0;
+			motor_front_left_.speed_sp = 70.0;
+			motor_front_right_.speed_sp = 70.0;
+			motor_rear_left_.speed_sp = 70.0;
+			motor_rear_right_.speed_sp = 70.0;
 
 			motor_front_left_drive(0.01);
 			motor_front_right_drive(0.01);
@@ -244,13 +245,16 @@ int main(void) {
 				while (status != HAL_OK) {
 					status = mpu.begin();
 					HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_15);
-					HAL_Delay(1000);
+//					HAL_Delay(1000);
 				}
 				mpu.calcOffsets();
 				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, GPIO_PIN_SET);
 			}
 			HAL_GPIO_TogglePin(GPIOB, GPIO_PIN_15);
 		}
+//		sprintf((char *)tmp_ch, "%d \r\n", count++);
+//		HAL_UART_Transmit(&huart1, tmp_ch, strlen((char *)tmp_ch), 1000);
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -738,10 +742,17 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 		motor_rear_left_.pps = (double) motor_rear_left_.delta_encoder * 100.0f;
 		motor_rear_right_.pps = (double) motor_rear_right_.delta_encoder * 100.0f;
 
-		motor_front_left_.rpm = motor_front_left_.pps * 60 / (448.0f * 43.8f * 4.0f);
-		motor_front_right_.rpm = motor_front_right_.pps * 60 / (448.0f * 43.8f * 4.0f);
-		motor_rear_left_.rpm = motor_rear_left_.pps * 60 / (448.0f * 43.8f * 4.0f);
-		motor_rear_right_.rpm = motor_rear_right_.pps * 60 / (448.0f * 43.8f * 4.0f);
+		motor_front_left_.rpm = motor_front_left_.pps * 60 / (500.0f * 4.0f);
+		motor_front_left_.rpm = (motor_front_left_.rpm / 45.0f) * 1.068f;
+
+		motor_front_right_.rpm = motor_front_right_.pps * 60 / (500.0f * 4.0f);
+		motor_front_right_.rpm = (motor_front_right_.rpm / 45.0f) * 1.068f;
+
+		motor_rear_left_.rpm = motor_rear_left_.pps * 60 / (500.0f * 4.0f);
+		motor_rear_left_.rpm = (motor_rear_left_.rpm / 45.0f) * 1.068f;
+
+		motor_rear_right_.rpm = motor_rear_right_.pps * 60 / (500.0f * 4.0f);
+		motor_rear_right_.rpm = (motor_rear_right_.rpm / 45.0f) * 1.068f;
 
 		motor_front_left_.speed_pv = motor_front_left_.rpm;
 		motor_front_right_.speed_pv = motor_front_right_.rpm;

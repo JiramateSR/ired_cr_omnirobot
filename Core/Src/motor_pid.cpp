@@ -9,6 +9,12 @@ double calculatePID(double _sp, double _pv, PID_Data_Typedef *_pid_data, double 
 		_pid_data->err = -1000.0;
 
 	_pid_data->sum_err += _pid_data->err;
+	if (_pid_data->sum_err < -1000) {
+		_pid_data->sum_err = -1000;
+	}
+	if (_pid_data->sum_err > 1000) {
+		_pid_data->sum_err = 1000;
+	}
 
 	double ret = (_pid_data->kp * _pid_data->err) + (_pid_data->ki * _pid_data->sum_err * _dt)
 			+ (_pid_data->kd * ((_pid_data->err - _pid_data->err_l) / _dt));
