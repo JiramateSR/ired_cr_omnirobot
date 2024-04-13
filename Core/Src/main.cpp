@@ -57,11 +57,14 @@ typedef struct {
 #define KP          0
 #define KI          1
 #define KD          2
-#define MPS2RPM(x)  (x * 280.8616642798) // N = 60/(2*PI*r) * V
-#define RPM2MPS(x)  (x * 0.003560471674) // V = (2*PI*r)/60 * N
-#define LENGHT			1
-#define WIDTH				2
+#define MPS2RPM(x)  (x * 150.3826233939) // N = 60/(2*PI*r) * V
+#define RPM2MPS(x)  (x * 0.006649704450) // V = (2*PI*r)/60 * N
+#define LENGHT			0.2909744f
+#define WIDTH				0.2909744f
 #define DEG2RAD(x)	(x*0.0174532925) // X = x * PI/180
+#define WHEEL_RADIUS 0.06354f
+#define ROBOT_RADUIS 0.41149994f
+#define M_PI				3.141592653f
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -233,10 +236,10 @@ int main(void) {
 	resetPIDData(&pid_data_front_right_);
 	resetPIDData(&pid_data_rear_left_);
 	resetPIDData(&pid_data_rear_right_);
-	setupPIDParameter(&pid_data_front_left_, 1.0, 0.0, 0.0);
-	setupPIDParameter(&pid_data_front_right_, 1.0, 0.0, 0.0);
-	setupPIDParameter(&pid_data_rear_left_, 1.0, 0.0, 0.0);
-	setupPIDParameter(&pid_data_rear_right_, 1.0, 0.0, 0.0);
+	setupPIDParameter(&pid_data_front_left_, 15.0, 85.0, 0.02);
+	setupPIDParameter(&pid_data_front_right_, 15.0, 85.0, 0.02);
+	setupPIDParameter(&pid_data_rear_left_, 15.0, 85.0, 0.02);
+	setupPIDParameter(&pid_data_rear_right_, 15.0, 85.0, 0.02);
 
 	/* ROS */
 	ROS_setup();
@@ -282,6 +285,10 @@ int main(void) {
 			motor_front_right_.speed_sp = set_speed_motor_[FRONT_RIGHT];
 			motor_rear_left_.speed_sp = set_speed_motor_[REAR_LEFT];
 			motor_rear_right_.speed_sp = set_speed_motor_[REAR_RIGHT];
+//			motor_front_left_.speed_sp = 10;
+//			motor_front_right_.speed_sp = -10;
+//			motor_rear_left_.speed_sp = 10;
+//			motor_rear_right_.speed_sp = -10;
 
 			if ((time_now - last_time_cmd_vel_).toSec() > 1.0) {
 				motor_front_left_.speed_sp = 0.0f;
@@ -774,20 +781,27 @@ static void MX_GPIO_Init(void) {
 /* Encoder */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 	if (htim->Instance == TIM4) {
-		motor_front_left_.delta_encoder = htim1.Instance->CNT - 30000;
-		motor_front_right_.delta_encoder = htim3.Instance->CNT - 30000;
-		motor_rear_left_.delta_encoder = htim5.Instance->CNT - 30000;
-		motor_rear_right_.delta_encoder = htim8.Instance->CNT - 30000;
+		motor_front_left_.delta_encoder = -1 * (htim1.Instance->CNT - 30000);
+		motor_front_right_.delta_encoder = -1 * (htim3.Instance->CNT - 30000);
+		motor_rear_left_.delta_encoder = -1 * (htim5.Instance->CNT - 30000);
+		motor_rear_right_.delta_encoder = -1 * (htim8.Instance->CNT - 30000);
 
 		motor_front_left_.pps = (double) motor_front_left_.delta_encoder * 100.0f;
 		motor_front_right_.pps = (double) motor_front_right_.delta_encoder * 100.0f;
 		motor_rear_left_.pps = (double) motor_rear_left_.delta_encoder * 100.0f;
 		motor_rear_right_.pps = (double) motor_rear_right_.delta_encoder * 100.0f;
 
-		motor_front_left_.rpm = motor_front_left_.pps * 60 / (448.0f * 43.8f * 4.0f);
-		motor_front_right_.rpm = motor_front_right_.pps * 60 / (448.0f * 43.8f * 4.0f);
-		motor_rear_left_.rpm = motor_rear_left_.pps * 60 / (448.0f * 43.8f * 4.0f);
-		motor_rear_right_.rpm = motor_rear_right_.pps * 60 / (448.0f * 43.8f * 4.0f);
+		motor_front_left_.rpm = motor_front_left_.pps * 60 / (500.0f * 4.0f);
+		motor_front_left_.rpm = (motor_front_left_.rpm / 45.0f) * 1.068f;
+
+		motor_front_right_.rpm = motor_front_right_.pps * 60 / (500.0f * 4.0f);
+		motor_front_right_.rpm = (motor_front_right_.rpm / 45.0f) * 1.068f;
+
+		motor_rear_left_.rpm = motor_rear_left_.pps * 60 / (500.0f * 4.0f);
+		motor_rear_left_.rpm = (motor_rear_left_.rpm / 45.0f) * 1.068f;
+
+		motor_rear_right_.rpm = motor_rear_right_.pps * 60 / (500.0f * 4.0f);
+		motor_rear_right_.rpm = (motor_rear_right_.rpm / 45.0f) * 1.068f;
 
 		motor_front_left_.speed_pv = motor_front_left_.rpm;
 		motor_front_right_.speed_pv = motor_front_right_.rpm;
@@ -813,18 +827,18 @@ void motor_front_left_drive(double dt) {
 	motor_front_left_.speed_command = speed_command;
 
 	if (speed_command > 0.0 && motor_front_left_.speed_sp > 0.0) {
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, GPIO_PIN_RESET);
 		TIM2->CCR1 = (int) speed_command;
 	} else if (speed_command < 0.0 && motor_front_left_.speed_sp < 0.0) {
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, GPIO_PIN_RESET);
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, GPIO_PIN_SET);
 		speed_command *= -1.0;
 		TIM2->CCR1 = (int) speed_command;
 	} else if (speed_command == 0) {
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, GPIO_PIN_RESET);
 		resetPIDData(&pid_data_front_left_);
 		TIM2->CCR1 = 0;
 	} else {
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0, GPIO_PIN_RESET);
 		resetPIDData(&pid_data_front_left_);
 		TIM2->CCR1 = 0;
 	}
@@ -841,18 +855,18 @@ void motor_front_right_drive(double dt) {
 	motor_front_right_.speed_command = speed_command;
 
 	if (speed_command > 0.0 && motor_front_right_.speed_sp > 0.0) {
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
 		TIM2->CCR2 = (int) speed_command;
 	} else if (speed_command < 0.0 && motor_front_right_.speed_sp < 0.0) {
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, GPIO_PIN_SET);
 		speed_command *= -1.0;
 		TIM2->CCR2 = (int) speed_command;
 	} else if (speed_command == 0) {
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
 		resetPIDData(&pid_data_front_right_);
 		TIM2->CCR2 = 0;
 	} else {
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_1, GPIO_PIN_RESET);
 		resetPIDData(&pid_data_front_right_);
 		TIM2->CCR2 = 0;
 	}
@@ -869,18 +883,18 @@ void motor_rear_left_drive(double dt) {
 	motor_rear_left_.speed_command = speed_command;
 
 	if (speed_command > 0.0 && motor_rear_left_.speed_sp > 0.0) {
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, GPIO_PIN_RESET);
 		TIM2->CCR3 = (int) speed_command;
 	} else if (speed_command < 0.0 && motor_rear_left_.speed_sp < 0.0) {
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, GPIO_PIN_RESET);
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, GPIO_PIN_SET);
 		speed_command *= -1.0;
 		TIM2->CCR3 = (int) speed_command;
 	} else if (speed_command == 0) {
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, GPIO_PIN_RESET);
 		resetPIDData(&pid_data_rear_left_);
 		TIM2->CCR3 = 0;
 	} else {
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_2, GPIO_PIN_RESET);
 		resetPIDData(&pid_data_rear_left_);
 		TIM2->CCR3 = 0;
 	}
@@ -897,18 +911,18 @@ void motor_rear_right_drive(double dt) {
 	motor_rear_right_.speed_command = speed_command;
 
 	if (speed_command > 0.0 && motor_rear_right_.speed_sp > 0.0) {
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, GPIO_PIN_RESET);
 		TIM2->CCR4 = (int) speed_command;
 	} else if (speed_command < 0.0 && motor_rear_right_.speed_sp < 0.0) {
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, GPIO_PIN_RESET);
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, GPIO_PIN_SET);
 		speed_command *= -1.0;
 		TIM2->CCR4 = (int) speed_command;
 	} else if (speed_command == 0) {
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, GPIO_PIN_RESET);
 		resetPIDData(&pid_data_rear_right_);
 		TIM2->CCR4 = 0;
 	} else {
-		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, GPIO_PIN_SET);
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_3, GPIO_PIN_RESET);
 		resetPIDData(&pid_data_rear_right_);
 		TIM2->CCR4 = 0;
 	}
@@ -947,14 +961,14 @@ void commandVelocityCallback(const geometry_msgs::Twist &msg) {
 	goal_linear_y_velocity_ = msg.linear.y;
 	goal_angular_velocity_ = msg.angular.z;
 
-	wheel_speed_cmd_[FRONT_LEFT] = goal_linear_x_velocity_ * cos(DEG2RAD(45.0))
-			+ goal_linear_y_velocity_ * sin(DEG2RAD(45.0)) + goal_angular_velocity_ * (LENGHT + WIDTH);
-	wheel_speed_cmd_[FRONT_RIGHT] = goal_linear_x_velocity_ * cos(DEG2RAD(135.0))
-			+ goal_linear_y_velocity_ * sin(DEG2RAD(135.0)) + goal_angular_velocity_ * (LENGHT + WIDTH);
-	wheel_speed_cmd_[REAR_LEFT] = goal_linear_x_velocity_ * cos(DEG2RAD(315.0))
-			+ goal_linear_y_velocity_ * sin(DEG2RAD(315.0)) + goal_angular_velocity_ * (LENGHT + WIDTH);
-	wheel_speed_cmd_[REAR_RIGHT] = goal_linear_x_velocity_ * cos(DEG2RAD(225.0))
-			+ goal_linear_y_velocity_ * sin(DEG2RAD(225.0)) + goal_angular_velocity_ * (LENGHT + WIDTH);
+	wheel_speed_cmd_[FRONT_LEFT] = -1 * (goal_linear_y_velocity_ * cos(DEG2RAD(45.0))
+			- goal_linear_x_velocity_ * sin(DEG2RAD(45.0)) + goal_angular_velocity_ * ROBOT_RADUIS);
+	wheel_speed_cmd_[FRONT_RIGHT] = -1 * (goal_linear_y_velocity_ * cos(DEG2RAD(315.0))
+			- goal_linear_x_velocity_ * sin(DEG2RAD(315.0)) + goal_angular_velocity_ * ROBOT_RADUIS);
+	wheel_speed_cmd_[REAR_LEFT] = -1 * (goal_linear_y_velocity_ * cos(DEG2RAD(135.0))
+			- goal_linear_x_velocity_ * sin(DEG2RAD(135.0)) + goal_angular_velocity_ * ROBOT_RADUIS);
+	wheel_speed_cmd_[REAR_RIGHT] = -1 * (goal_linear_y_velocity_ * cos(DEG2RAD(225.0))
+			- goal_linear_x_velocity_ * sin(DEG2RAD(225.0)) + goal_angular_velocity_ * ROBOT_RADUIS);
 
 	set_speed_motor_[FRONT_LEFT] = MPS2RPM(wheel_speed_cmd_[FRONT_LEFT]);
 	set_speed_motor_[FRONT_RIGHT] = MPS2RPM(wheel_speed_cmd_[FRONT_RIGHT]);
